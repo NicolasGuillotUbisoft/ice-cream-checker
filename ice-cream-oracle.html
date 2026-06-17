@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Ice Cream Oracle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Space+Grotesk:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --col-void:    #08001A;
+      --col-deep:    #110028;
+      --col-gold:    #F8C520;
+      --col-pink:    #FF6B9D;
+      --col-lavender:#C4B5FD;
+      --col-cream:   #FFF8E7;
+      --col-orb-yes: rgba(248,197,32,0.18);
+      --col-orb-no:  rgba(196,181,253,0.12);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--col-void);
+      color: var(--col-cream);
+      font-family: 'Space Grotesk', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* ── canvas starfield behind everything ── */
+    #canvas-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── canvas confetti/burst on top ── */
+    #canvas-fx {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* ── main layout ── */
+    main {
+      position: relative;
+      z-index: 1;
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2rem;
+      padding: 2rem 1rem 4rem;
+    }
+
+    /* ── eyebrow ── */
+    .eyebrow {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--col-lavender);
+      opacity: 0.7;
+    }
+
+    /* ── orb ── */
+    .orb-wrap {
+      position: relative;
+      width: clamp(220px, 40vw, 340px);
+      aspect-ratio: 1;
+    }
+
+    .orb {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 38% 35%, rgba(255,255,255,0.14) 0%, transparent 60%),
+                  radial-gradient(circle at 65% 70%, var(--col-orb-no) 0%, transparent 55%),
+                  radial-gradient(circle at 50% 50%, var(--col-deep) 0%, var(--col-void) 100%);
+      border: 1px solid rgba(196,181,253,0.22);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 1.2s ease, border-color 1.2s ease, box-shadow 1.2s ease;
+      box-shadow:
+        0 0 40px rgba(196,181,253,0.08),
+        inset 0 0 60px rgba(0,0,0,0.6);
+    }
+
+    .orb.yes {
+      background: radial-gradient(circle at 38% 35%, rgba(255,255,255,0.18) 0%, transparent 55%),
+                  radial-gradient(circle at 65% 70%, var(--col-orb-yes) 0%, transparent 55%),
+                  radial-gradient(circle at 50% 50%, #1A0E00 0%, var(--col-void) 100%);
+      border-color: rgba(248,197,32,0.38);
+      box-shadow:
+        0 0 70px rgba(248,197,32,0.28),
+        0 0 120px rgba(248,197,32,0.10),
+        inset 0 0 60px rgba(0,0,0,0.4);
+    }
+
+    .orb.urgent {
+      border-color: rgba(255,107,157,0.5);
+      box-shadow:
+        0 0 60px rgba(255,107,157,0.30),
+        0 0 120px rgba(255,107,157,0.10),
+        inset 0 0 60px rgba(0,0,0,0.4);
+    }
+
+    /* glass highlight */
+    .orb::after {
+      content: '';
+      position: absolute;
+      top: 12%;
+      left: 22%;
+      width: 30%;
+      height: 22%;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.10);
+      filter: blur(6px);
+      pointer-events: none;
+    }
+
+    /* orb glow ring */
+    .orb-ring {
+      position: absolute;
+      inset: -12px;
+      border-radius: 50%;
+      border: 1px solid rgba(196,181,253,0.10);
+      animation: ring-breathe 4s ease-in-out infinite;
+    }
+    .orb-ring.yes  { border-color: rgba(248,197,32,0.20); animation: ring-pulse-gold 1.8s ease-in-out infinite; }
+    .orb-ring.urgent { border-color: rgba(255,107,157,0.25); animation: ring-pulse-pink 0.9s ease-in-out infinite; }
+
+    @keyframes ring-breathe {
+      0%,100% { transform: scale(1);   opacity: 0.5; }
+      50%      { transform: scale(1.04); opacity: 1;   }
+    }
+    @keyframes ring-pulse-gold {
+      0%,100% { transform: scale(1);   opacity: 0.6; box-shadow: 0 0 0 0 rgba(248,197,32,0); }
+      50%      { transform: scale(1.06); opacity: 1;   box-shadow: 0 0 30px 8px rgba(248,197,32,0.15); }
+    }
+    @keyframes ring-pulse-pink {
+      0%,100% { transform: scale(1);   opacity: 0.5; }
+      50%      { transform: scale(1.08); opacity: 1;   }
+    }
+
+    /* ── face emoji ── */
+    .face {
+      font-size: clamp(5rem, 12vw, 8rem);
+      line-height: 1;
+      animation: float 5s ease-in-out infinite;
+      user-select: none;
+      filter: drop-shadow(0 8px 24px rgba(0,0,0,0.5));
+      transition: font-size 0.4s ease;
+    }
+
+    @keyframes float {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-10px); }
+    }
+
+    .face.urgent {
+      animation: shake 0.5s ease-in-out infinite;
+    }
+    @keyframes shake {
+      0%,100% { transform: translateX(0) rotate(0deg); }
+      25%      { transform: translateX(-6px) rotate(-4deg); }
+      75%      { transform: translateX(6px) rotate(4deg); }
+    }
+
+    /* ── ice cream beneath orb ── */
+    .icecream-icon {
+      font-size: 2.4rem;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+      margin-top: -0.8rem;
+      user-select: none;
+      filter: drop-shadow(0 4px 12px rgba(248,197,32,0.5));
+    }
+    .icecream-icon.show { opacity: 1; transform: translateY(0); }
+
+    /* ── headline block ── */
+    .verdict-wrap {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-width: 520px;
+    }
+
+    .verdict {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(2.2rem, 7vw, 4rem);
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      line-height: 1.1;
+      color: var(--col-cream);
+      transition: color 0.8s ease;
+    }
+    .verdict.yes    { color: var(--col-gold); }
+    .verdict.urgent { color: var(--col-pink); }
+    .verdict.no     { color: var(--col-lavender); }
+
+    .sub {
+      font-size: clamp(0.88rem, 2.5vw, 1.05rem);
+      font-weight: 300;
+      color: rgba(255,248,231,0.55);
+      letter-spacing: 0.03em;
+      line-height: 1.6;
+      transition: color 0.8s ease;
+    }
+
+    /* ── countdown ── */
+    .countdown-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .countdown-block.show { opacity: 1; transform: none; }
+
+    .countdown-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(196,181,253,0.5);
+    }
+    .countdown-label.yes { color: rgba(248,197,32,0.5); }
+    .countdown-label.urgent { color: rgba(255,107,157,0.6); }
+
+    .countdown {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(1.6rem, 5vw, 2.4rem);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--col-lavender);
+      transition: color 0.6s ease;
+    }
+    .countdown.yes    { color: var(--col-gold); }
+    .countdown.urgent { color: var(--col-pink); }
+
+    /* ── clock ── */
+    .clock {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 400;
+      letter-spacing: 0.14em;
+      color: rgba(196,181,253,0.35);
+      margin-top: 1.5rem;
+    }
+
+    /* ── decree divider ── */
+    .decree-line {
+      width: 120px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(196,181,253,0.25), transparent);
+      margin: 0 auto;
+      transition: background 0.8s ease;
+    }
+    .decree-line.yes    { background: linear-gradient(90deg, transparent, rgba(248,197,32,0.35), transparent); }
+    .decree-line.urgent { background: linear-gradient(90deg, transparent, rgba(255,107,157,0.4), transparent); }
+
+    /* ── bottom scroll inscription ── */
+    .inscription {
+      position: absolute;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Cinzel', serif;
+      font-size: 0.6rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(196,181,253,0.18);
+      white-space: nowrap;
+    }
+
+    /* ── reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      .face, .orb-ring, .icecream-icon { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="canvas-bg"></canvas>
+<canvas id="canvas-fx"></canvas>
+
+<main>
+  <p class="eyebrow">The Ice Cream Oracle</p>
+
+  <div class="orb-wrap">
+    <div class="orb" id="orb">
+      <span class="face" id="face" role="img" aria-label="Oracle face">😴</span>
+    </div>
+    <div class="orb-ring" id="orb-ring"></div>
+  </div>
+
+  <span class="icecream-icon" id="icecream" role="img" aria-hidden="true">🍦</span>
+
+  <div class="verdict-wrap">
+    <div class="decree-line" id="decree-line"></div>
+    <h1 class="verdict" id="verdict">The hour has not come</h1>
+    <p class="sub" id="sub">The Oracle watches. The sacred window opens at 4 PM and closes at 5 PM.</p>
+    <div class="decree-line" id="decree-line2"></div>
+  </div>
+
+  <div class="countdown-block" id="countdown-block">
+    <span class="countdown-label" id="countdown-label">Next decree in</span>
+    <span class="countdown" id="countdown">00:00</span>
+  </div>
+
+  <p class="clock" id="clock">--:--:--</p>
+</main>
+
+<p class="inscription">Lex glacialis • Established by decree of the Oracle</p>
+
+<script>
+// ── State enum ──────────────────────────────────────────────────────────────
+const STATE = { BEFORE: 'before', YES: 'yes', URGENT: 'urgent', AFTER: 'after' };
+
+// ── DOM refs ─────────────────────────────────────────────────────────────────
+const orbEl         = document.getElementById('orb');
+const orbRingEl     = document.getElementById('orb-ring');
+const faceEl        = document.getElementById('face');
+const verdictEl     = document.getElementById('verdict');
+const subEl         = document.getElementById('sub');
+const icecreamEl    = document.getElementById('icecream');
+const countdownEl   = document.getElementById('countdown');
+const countdownBlEl = document.getElementById('countdown-block');
+const countdownLbEl = document.getElementById('countdown-label');
+const clockEl       = document.getElementById('clock');
+const decreeLine    = document.getElementById('decree-line');
+const decreeLine2   = document.getElementById('decree-line2');
+const canvasBg      = document.getElementById('canvas-bg');
+const canvasFx      = document.getElementById('canvas-fx');
+const ctxBg         = canvasBg.getContext('2d');
+const ctxFx         = canvasFx.getContext('2d');
+
+// ── Resize canvases ──────────────────────────────────────────────────────────
+function resizeCanvases() {
+  canvasBg.width  = canvasFx.width  = window.innerWidth;
+  canvasBg.height = canvasFx.height = window.innerHeight;
+}
+resizeCanvases();
+window.addEventListener('resize', resizeCanvases);
+
+// ── Starfield ────────────────────────────────────────────────────────────────
+const STARS = Array.from({ length: 160 }, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  r: Math.random() * 1.2 + 0.2,
+  a: Math.random(),
+  speed: Math.random() * 0.0008 + 0.0002,
+  phase: Math.random() * Math.PI * 2,
+}));
+
+let bgFrame = 0;
+function drawStars(isYes) {
+  const W = canvasBg.width, H = canvasBg.height;
+  ctxBg.clearRect(0, 0, W, H);
+  bgFrame++;
+  STARS.forEach(s => {
+    const twinkle = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(bgFrame * s.speed * 40 + s.phase));
+    ctxBg.beginPath();
+    ctxBg.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+    if (isYes) {
+      ctxBg.fillStyle = `rgba(248,197,32,${twinkle * 0.55})`;
+    } else {
+      ctxBg.fillStyle = `rgba(196,181,253,${twinkle * 0.4})`;
+    }
+    ctxBg.fill();
+  });
+}
+
+// ── Confetti particles ───────────────────────────────────────────────────────
+const COLORS_CONFETTI = ['#F8C520','#FF6B9D','#C4B5FD','#FFF8E7','#6BFFF1'];
+let particles = [];
+
+function spawnConfetti(count = 80) {
+  const W = canvasFx.width, H = canvasFx.height;
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: W * 0.5,
+      y: H * 0.42,
+      vx: (Math.random() - 0.5) * 14,
+      vy: Math.random() * -14 - 4,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 0.3,
+      w: Math.random() * 10 + 4,
+      h: Math.random() * 5 + 2,
+      color: COLORS_CONFETTI[Math.floor(Math.random() * COLORS_CONFETTI.length)],
+      life: 1,
+      decay: Math.random() * 0.008 + 0.004,
+    });
+  }
+}
+
+function drawParticles() {
+  const W = canvasFx.width, H = canvasFx.height;
+  ctxFx.clearRect(0, 0, W, H);
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    p.x  += p.vx;
+    p.y  += p.vy;
+    p.vy += 0.35; // gravity
+    p.rot += p.vr;
+    p.life -= p.decay;
+    ctxFx.save();
+    ctxFx.globalAlpha = Math.max(0, p.life);
+    ctxFx.translate(p.x, p.y);
+    ctxFx.rotate(p.rot);
+    ctxFx.fillStyle = p.color;
+    ctxFx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    ctxFx.restore();
+  });
+}
+
+// ── Time helpers ─────────────────────────────────────────────────────────────
+function getState(now) {
+  const h = now.getHours(), m = now.getMinutes();
+  const mins = h * 60 + m;
+  if (mins < 960)  return STATE.BEFORE;   // before 16:00
+  if (mins < 1010) return STATE.URGENT;   // 16:50–17:00 (last 10 min)
+  if (mins >= 960 && mins < 1010) return STATE.YES; // unreachable, handled below
+  if (mins >= 1000) return STATE.AFTER;   // 17:00+
+  return STATE.BEFORE;
+}
+
+function getStatePrecise(now) {
+  const h = now.getHours(), m = now.getMinutes();
+  const totalMins = h * 60 + m;
+  if (totalMins < 960)  return STATE.BEFORE;
+  if (totalMins < 1010) return STATE.YES;
+  if (totalMins < 1010) return STATE.URGENT;
+  return STATE.AFTER;
+}
+
+function computeState(now) {
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const s = now.getSeconds();
+  const totalSecs = h * 3600 + m * 60 + s;
+  const open  = 16 * 3600;       // 16:00:00
+  const urgent = 16 * 3600 + 50 * 60; // 16:50:00  (10 min warning)
+  const close = 17 * 3600;       // 17:00:00
+
+  if (totalSecs < open)   return STATE.BEFORE;
+  if (totalSecs < urgent) return STATE.YES;
+  if (totalSecs < close)  return STATE.URGENT;
+  return STATE.AFTER;
+}
+
+function secsUntil(targetH, targetM, targetS, now) {
+  const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+  const nowSecs = h * 3600 + m * 60 + s;
+  const target  = targetH * 3600 + targetM * 60 + targetS;
+  let diff = target - nowSecs;
+  if (diff < 0) diff += 86400;
+  return diff;
+}
+
+function formatSecs(s) {
+  const hh = Math.floor(s / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (hh > 0) return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+  return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+
+// ── Apply state to DOM ───────────────────────────────────────────────────────
+let lastState = null;
+
+const CONTENT = {
+  [STATE.BEFORE]: {
+    face:    '😴',
+    ariaFace:'Sleeping face',
+    verdict: 'The hour has not come',
+    sub:     'The Oracle slumbers. Return when the clock strikes four, and the decree shall be made.',
+    verdictClass: 'no',
+    countdownLabel: 'Sacred window opens in',
+    showIcecream: false,
+    showCountdown: true,
+  },
+  [STATE.YES]: {
+    face:    '🥳',
+    ariaFace:'Party face',
+    verdict: 'Go. Get. Ice Cream.',
+    sub:     'The Oracle has spoken. This window is fleeting. Honor the decree.',
+    verdictClass: 'yes',
+    countdownLabel: 'Window closes in',
+    showIcecream: true,
+    showCountdown: true,
+  },
+  [STATE.URGENT]: {
+    face:    '😱',
+    ariaFace:'Horrified face — hurry!',
+    verdict: 'Last Chance!',
+    sub:     'The sacred window is closing. Drop everything. Go now. The Oracle grows impatient.',
+    verdictClass: 'urgent',
+    countdownLabel: 'Closing in',
+    showIcecream: true,
+    showCountdown: true,
+  },
+  [STATE.AFTER]: {
+    face:    '😢',
+    ariaFace:'Weeping face',
+    verdict: 'The window is closed',
+    sub:     'The Oracle mourns with you. Tomorrow, 4 PM sharp. Do not be late again.',
+    verdictClass: 'no',
+    countdownLabel: 'Next decree in',
+    showIcecream: false,
+    showCountdown: true,
+  },
+};
+
+function applyState(state, burstNow) {
+  const c = CONTENT[state];
+
+  faceEl.textContent = c.face;
+  faceEl.setAttribute('aria-label', c.ariaFace);
+
+  verdictEl.textContent = c.verdict;
+  verdictEl.className   = `verdict ${c.verdictClass}`;
+
+  subEl.textContent = c.sub;
+
+  // orb / ring class
+  orbEl.className   = `orb ${state === STATE.YES || state === STATE.URGENT ? (state === STATE.URGENT ? 'urgent' : 'yes') : ''}`;
+  orbRingEl.className = `orb-ring ${state === STATE.YES ? 'yes' : state === STATE.URGENT ? 'urgent' : ''}`;
+
+  // face animation
+  faceEl.className = `face ${state === STATE.URGENT ? 'urgent' : ''}`;
+
+  // decree lines
+  const lineClass = state === STATE.YES ? 'yes' : state === STATE.URGENT ? 'urgent' : '';
+  decreeLine.className  = `decree-line ${lineClass}`;
+  decreeLine2.className = `decree-line ${lineClass}`;
+
+  // icecream
+  icecreamEl.className = `icecream-icon ${c.showIcecream ? 'show' : ''}`;
+
+  // countdown
+  countdownBlEl.className = `countdown-block ${c.showCountdown ? 'show' : ''}`;
+  countdownLbEl.textContent = c.countdownLabel;
+  countdownLbEl.className = `countdown-label ${state === STATE.YES ? 'yes' : state === STATE.URGENT ? 'urgent' : ''}`;
+  countdownEl.className = `countdown ${state === STATE.YES ? 'yes' : state === STATE.URGENT ? 'urgent' : ''}`;
+
+  // burst confetti on YES transition
+  if (burstNow) spawnConfetti(120);
+}
+
+// ── Main loop ────────────────────────────────────────────────────────────────
+function tick() {
+  const now   = new Date();
+  const state = computeState(now);
+
+  // clock
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const ss = String(now.getSeconds()).padStart(2,'0');
+  clockEl.textContent = `${hh}:${mm}:${ss}`;
+
+  // countdown value
+  let diffSecs;
+  if (state === STATE.BEFORE)  diffSecs = secsUntil(16, 0, 0, now);
+  else if (state === STATE.YES)    diffSecs = secsUntil(16, 50, 0, now);
+  else if (state === STATE.URGENT) diffSecs = secsUntil(17, 0, 0, now);
+  else                             diffSecs = secsUntil(16, 0, 0, now); // tomorrow
+  countdownEl.textContent = formatSecs(diffSecs);
+
+  // state transition
+  const burst = (lastState !== STATE.YES && (state === STATE.YES));
+  if (state !== lastState) {
+    applyState(state, burst);
+    lastState = state;
+  }
+
+  // background
+  drawStars(state === STATE.YES || state === STATE.URGENT);
+  drawParticles();
+
+  requestAnimationFrame(tick);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+applyState(computeState(new Date()), false);
+tick();
+</script>
+</body>
+</html>
